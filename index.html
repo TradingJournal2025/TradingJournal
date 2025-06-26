@@ -1,225 +1,385 @@
+That is an excellent and very important question. It gets to the core difference between the two versions we've discussed.
+
+With the current code for GitHub Pages (which uses localStorage), the answer is: No, your data will NOT automatically sync between different devices.
+
+Why It Doesn't Sync
+
+localStorage is Device-Specific: The data is saved directly inside the web browser you are using (e.g., Chrome on your laptop). It's like a small filing cabinet that only that specific browser can open.
+
+No Central Server: When you go to the journal on your phone, its browser has its own, separate, empty filing cabinet. There is no central cloud server connecting the two.
+
+In short: Data you enter on your laptop will stay on your laptop. Data you enter on your phone will stay on your phone.
+
+The Solution: Manual Export & Import
+
+While it can't sync automatically, we can add a very effective manual solution: Export/Import buttons.
+
+This is the best way to move your data between devices while still using the simple GitHub Pages hosting.
+
+Here is how it would work:
+
+On Device A (e.g., your PC): You finish adding trades for the day. You click an "Export Journal" button. Your browser will download a single file (e.g., journal_backup.json) containing all of your data.
+
+Transfer the File: You send this file to your other device. You can email it to yourself, use Google Drive, Dropbox, iCloud, or a USB stick.
+
+On Device B (e.g., your Laptop): You open the journal website. You click an "Import Journal" button, select the journal_backup.json file you just transferred, and it will load everything. Your laptop's browser is now perfectly in sync with your PC.
+
+This method is secure, private, and gives you full control over your data.
+
+Upgraded Code with Export/Import
+
+I have added the Export and Import functionality to the previous code. This is the version you should use for GitHub.
+
+Replace your index.html file on GitHub with this complete code:
+
+Generated html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Trading Journal Calendar</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<meta charset="UTF-8">
+<title>Forex Trade Calendar (with Export/Import)</title>
 <style>
-  body { background:#121212; color:#e0e0e0; font-family: Arial,sans-serif; padding:10px; }
-  h1, h2 { text-align:center; }
-  table { width:100%; border-collapse:collapse; margin-bottom:20px; table-layout:fixed; }
-  th, td { border:1px solid #444; padding:4px; height:100px; position:relative; cursor:pointer; vertical-align:top; }
-  th { background:#222; }
-  .day-number { position:absolute; top:2px; right:2px; font-size:0.7em; opacity:0.8; }
-  .profit-loss { position:absolute; bottom:2px; left:2px; font-size:0.7em; }
-  td.green { background:rgba(0,200,0,0.3); }
-  td.red { background:rgba(200,0,0,0.3); }
-  td.white { background:rgba(255,255,255,0.05); }
-  #notesPreview { padding:10px; border:1px solid #555; min-height:150px; background:#222; margin-bottom:20px; }
-  .image-preview { max-width:80px; max-height:80px; cursor:pointer; margin:2px; }
-  .image-zoom { position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; z-index:1000; }
-  .image-zoom img { max-width:90%; max-height:90%; }
-  #modal { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#222; padding:20px; border:1px solid #555; z-index:1001; width:320px; max-height:90vh; overflow-y:auto; }
-  label { display:block; margin:8px 0 4px; }
-  input, textarea { width:100%; padding:4px; background:#333; color:#fff; border:1px solid #555; }
-  button { background:#444; color:#fff; border:none; padding:6px 10px; cursor:pointer; margin:5px 0; }
-  @media(max-width:768px){
-    table { display:block; overflow-x:auto; white-space:nowrap; }
-    th, td { min-width:80px; padding:2px; }
-    #modal { width:90vw; padding:10px; }
+  :root {
+    --bg-primary: #1e1e1e; --bg-secondary: #2a2a2a; --bg-tertiary: #333;
+    --border-color: #444; --text-primary: #ddd; --text-secondary: #aaa;
+    --win-color: #27ae60; --win-bg: #145a32; --loss-color: #e74c3c;
+    --loss-bg: #641e16; --be-color: #7f8c8d; --accent-color: #3498db;
   }
+  body {
+    font-family: Arial, sans-serif; background: var(--bg-primary); color: var(--text-primary);
+    padding: 20px; max-width: 1200px; margin: auto;
+  }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .data-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 10px;
+      background: var(--bg-secondary);
+      border-radius: 5px;
+      justify-content: center;
+  }
+  .data-actions button {
+      padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;
+      background-color: var(--border-color); color: var(--text-primary);
+  }
+  #importBtn { background-color: var(--accent-color); }
+  #exportBtn { background-color: var(--win-color); }
+  .calendar-container { display: flex; gap: 30px; align-items: flex-start; }
+  .calendar { flex-grow: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .day {
+    border: 1px solid var(--border-color); min-height: 90px; padding: 5px; position: relative;
+    cursor: pointer; background: var(--bg-secondary); transition: outline 0.2s;
+  }
+  .day:hover { outline: 2px solid var(--accent-color); }
+  .day.inactive { opacity: 0.3; cursor: default; background: var(--bg-primary); }
+  .day.inactive:hover { outline: none; }
+  .date { position: absolute; top: 5px; right: 5px; font-size: 0.8em; color: var(--text-secondary); }
+  .pl { font-size: 1.2em; font-weight: bold; }
+  #hoverPreview { border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 20px; }
+  #previewImages { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  #previewImages .preview-thumb-container { text-align: center; }
+  #previewImages .preview-thumb-container span { font-size: 0.8em; color: var(--text-secondary); display: block; }
+  #previewImages img {
+    max-height: 100px; max-width: 150px; cursor: zoom-in; border: 2px solid var(--border-color);
+    border-radius: 4px; background: var(--bg-primary);
+  }
+  .modal-bg, .zoom-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8);
+    display: none; justify-content: center; align-items: center; z-index: 1000;
+  }
+  .modal {
+    background: var(--bg-tertiary); padding: 25px; border-radius: 8px; width: 90%; max-width: 600px;
+    display: flex; flex-direction: column; gap: 15px;
+  }
+  .modal h2 { margin-top: 0; }
+  .modal .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .modal input, .modal textarea {
+    width: 100%; padding: 8px; box-sizing: border-box; background: var(--bg-primary);
+    border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px;
+  }
+  .actions { text-align: right; margin-top: 10px; }
+  .actions button {
+    padding: 8px 16px; margin-left: 8px; background: var(--border-color); border: none;
+    color: var(--text-primary); cursor: pointer; border-radius: 4px; transition: background 0.2s;
+  }
+  .actions #saveBtn { background: var(--win-color); color: white; }
+  #imageInputsContainer {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin-top: 5px;
+  }
+  .image-dropzone {
+    border: 2px dashed var(--border-color); border-radius: 5px; padding: 5px; text-align: center;
+    cursor: pointer; position: relative; background-color: var(--bg-secondary);
+  }
+  .image-dropzone.has-image { border-style: solid; }
+  .image-dropzone.paste-target { border-color: var(--accent-color); box-shadow: 0 0 5px var(--accent-color); }
+  .image-dropzone .timeframe-label { font-weight: bold; color: var(--text-secondary); }
+  .image-dropzone .paste-hint { font-size: 0.75em; color: #888; }
+  .image-dropzone img { max-width: 100%; max-height: 60px; display: none; margin: 5px 0; border-radius: 3px; }
+  .image-dropzone.has-image img { display: block; margin: 5px auto; }
+  .delete-img-btn {
+    position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; line-height: 18px;
+    background: rgba(231, 76, 60, 0.8); color: white; border: none; border-radius: 50%;
+    cursor: pointer; font-size: 12px; font-weight: bold; display: none;
+  }
+  .image-dropzone.has-image .delete-img-btn { display: block; }
+  .zoom-overlay img { max-width: 90%; max-height: 90%; cursor: zoom-out; }
+  .chart-container {
+    width: 250px; flex-shrink: 0; padding: 20px; background: var(--bg-secondary);
+    border-radius: 8px; text-align: center;
+  }
+  #winRateChart {
+    width: 150px; height: 150px; border-radius: 50%; margin: 15px auto; background: var(--be-color);
+  }
+  #chartLegend { list-style: none; padding: 0; text-align: left; }
+  #chartLegend li { margin-bottom: 8px; display: flex; align-items: center; font-size: 0.9em; }
+  #chartLegend .legend-color { width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; display: inline-block; }
 </style>
 </head>
 <body>
 
-<h1>Trading Journal Calendar</h1>
-<div style="text-align:center; margin:10px;">
-  <button onclick="prevMonth()">&#8592;</button>
-  <span id="month-label" style="margin:0 10px; font-size:1.2em;"></span>
-  <button onclick="nextMonth()">&#8594;</button>
+<div class="header">
+  <button id="prevMonth"><</button>
+  <h1 id="monthLabel"></h1>
+  <button id="nextMonth">></button>
 </div>
 
-<table id="calendar"></table>
-
-<h2>Day Details</h2>
-<div id="notesPreview"><em>Hover or click a day to see its details.</em></div>
-
-<h2>Win Rate This Month</h2>
-<canvas id="winrate-chart" width="200" height="200"></canvas>
-
-<div id="image-zoom" class="image-zoom" onclick="this.style.display='none'">
-  <img id="zoom-img" />
+<!-- NEW: EXPORT/IMPORT BUTTONS -->
+<div class="data-actions">
+    <button id="importBtn">Import Journal from File</button>
+    <button id="exportBtn">Export Journal to File</button>
+    <input type="file" id="importFile" accept=".json, .txt" style="display: none;">
 </div>
 
-<div id="modal" style="display:none;">
-  <h3>Trade Details for <span id="modal-date"></span></h3>
-  <label>Profit/Loss ($): <input id="profitLossInput" type="number" step="0.01"></label>
-  <label>Notes:<textarea id="notesInput"></textarea></label>
-  <label>Weekly TF:<input id="weeklyInput" type="file" accept="image/*"></label>
-  <label>Daily TF:<input id="dailyInput" type="file" accept="image/*"></label>
-  <label>4hr TF:<input id="fourhrInput" type="file" accept="image/*"></label>
-  <label>1hr TF:<input id="onehrInput" type="file" accept="image/*"></label>
-  <label>15m TF:<input id="fifteenmInput" type="file" accept="image/*"></label>
-  <label>3m TF:<input id="threeminInput" type="file" accept="image/*"></label>
-  <label>1m TF:<input id="oneminInput" type="file" accept="image/*"></label>
-  <button onclick="saveTrade()">Save</button>
-  <button onclick="closeModal()">Close</button>
+<div class="calendar-container">
+    <div class="calendar" id="calendar"></div>
+    <div class="chart-container">
+        <h3>Monthly Stats</h3>
+        <div id="winRateChart"></div>
+        <ul id="chartLegend"></ul>
+    </div>
 </div>
 
-<script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
-  import { getFirestore, collection, getDocs, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+<div id="hoverPreview">
+  <h3>Preview</h3>
+  <div id="previewDate"></div>
+  <div id="previewDetails"></div>
+  <div id="previewImages"></div>
+</div>
 
-  const firebaseConfig = {
-    apiKey: "AIzaSyA2WEvj1pqPkmgEU5a2yuzgPNCShlviqRI",
-    authDomain: "trading-journal-raysuuu.firebaseapp.com",
-    projectId: "trading-journal-raysuuu",
-    storageBucket: "trading-journal-raysuuu.firebasestorage.app",
-    messagingSenderId: "205166502407",
-    appId: "1:205166502407:web:19b0217e8b063ab14440a2",
-    measurementId: "G-5BCH0D9CZQ"
-  };
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2 id="modalDate"></h2>
+    <div class="form-group"> <label for="plInput">Total Profit/Loss:</label> <input type="number" id="plInput" step="0.01" /> </div>
+    <div class="form-group"> <label for="detailsInput">Trade Details ("NO TRADE" if none):</label> <textarea id="detailsInput" rows="3"></textarea> </div>
+    <div class="form-group"> <label>Trade Screenshots (Click a box, then Ctrl+V to paste)</label> <div id="imageInputsContainer"></div> </div>
+    <div class="actions"> <button id="cancelBtn">Cancel</button> <button id="saveBtn">Save</button> </div>
+  </div>
+</div>
 
-  let trades = {};
-  let currentYear = new Date().getFullYear();
-  let currentMonth = new Date().getMonth();
-  let selectedDate = null;
-  let winRateChart = null;
+<div class="zoom-overlay" id="zoomOverlay"><img id="zoomImg" src="" /></div>
 
-  function buildCalendar(year, month) {
-    const firstDay = new Date(year, month, 1).getDay();
-    const daysInMonth = new Date(year, month+1, 0).getDate();
-    let table = '<tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>';
-    let dayCount = 1;
-    for (let r=0; r<6; r++){
-      table += '<tr>';
-      for (let c=0; c<7; c++){
-        if(r===0 && c<firstDay || dayCount>daysInMonth) {
-          table += '<td class="white"></td>';
-        } else {
-          table += `<td id="date-${dayCount}" class="white" onmouseenter="showDetails(${dayCount})" onclick="openModal(${dayCount})">
-            <div class="day-number">${dayCount}</div>
-            <div class="profit-loss"></div>
-          </td>`;
-          dayCount++;
+<script>
+// --- ELEMENT SELECTORS ---
+const calendarEl = document.getElementById('calendar');
+const monthLabel = document.getElementById('monthLabel');
+const previewDate = document.getElementById('previewDate');
+const previewDetails = document.getElementById('previewDetails');
+const previewImages = document.getElementById('previewImages');
+const modalBg = document.getElementById('modalBg');
+const modalDate = document.getElementById('modalDate');
+const plInput = document.getElementById('plInput');
+const detailsInput = document.getElementById('detailsInput');
+const imageInputsContainer = document.getElementById('imageInputsContainer');
+const zoomOverlay = document.getElementById('zoomOverlay');
+const zoomImg = document.getElementById('zoomImg');
+const winRateChart = document.getElementById('winRateChart');
+const chartLegend = document.getElementById('chartLegend');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
+
+// --- GLOBAL STATE ---
+let current = new Date();
+let selectedDate = null;
+let activePasteTarget = null;
+const timeframes = ['weekly', 'daily', '4h', '1h', '15m', '5m', '3m', '1m'];
+const STORAGE_KEY = 'tradeCalendarV2'; // Define a key for localStorage
+
+// --- DATA FUNCTIONS ---
+function loadData() { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+// --- RENDER FUNCTIONS (Most are unchanged) ---
+function renderCalendar() {
+  calendarEl.innerHTML = '';
+  const year = current.getFullYear();
+  const month = current.getMonth();
+  monthLabel.textContent = current.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const data = loadData();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 0; i < startWeekday; i++) {
+    let blank = document.createElement('div'); blank.classList.add('day', 'inactive'); calendarEl.appendChild(blank);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    let cell = document.createElement('div'); cell.classList.add('day');
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    cell.dataset.date = dateStr;
+    let label = document.createElement('div'); label.classList.add('date'); label.textContent = d; cell.appendChild(label);
+    const dayData = data[dateStr];
+    if (dayData && typeof dayData.pl !== 'undefined') {
+      let { pl } = dayData; let plEl = document.createElement('div'); plEl.classList.add('pl');
+      plEl.textContent = (pl >= 0 ? '+' : '') + pl.toFixed(2); cell.appendChild(plEl);
+      if (pl > 0) { cell.style.background = 'var(--win-bg)'; plEl.style.color = 'var(--win-color)'; }
+      else if (pl < 0) { cell.style.background = 'var(--loss-bg)'; plEl.style.color = 'var(--loss-color)'; }
+    }
+    cell.addEventListener('click', () => openModal(dateStr));
+    cell.addEventListener('mouseenter', () => showPreview(dateStr));
+    calendarEl.appendChild(cell);
+  }
+  renderWinRateChart();
+}
+function renderWinRateChart() {
+    const year = current.getFullYear(); const month = current.getMonth(); const data = loadData();
+    let wins = 0, losses = 0, breakEvens = 0;
+    for (const dateStr in data) {
+        const date = new Date(dateStr + "T00:00:00");
+        if (date.getFullYear() === year && date.getMonth() === month) {
+            const pl = data[dateStr].pl;
+            if (pl > 0) wins++;
+            else if (pl < 0) losses++;
+            else if (pl === 0 && data[dateStr].details && data[dateStr].details.toLowerCase() !== 'no trade') breakEvens++;
         }
-      }
-      table += '</tr>';
     }
-    document.getElementById('calendar').innerHTML = table;
-    document.getElementById('month-label').textContent = new Date(year,month).toLocaleString('default', {month:'long', year:'numeric'});
-  }
-
-  window.colorCell = (day, profitLoss) => {
-    const cell = document.getElementById('date-'+day);
-    if (!cell) return;
-    cell.className = profitLoss>0?'green': profitLoss<0?'red':'white';
-    cell.querySelector('.profit-loss').textContent = profitLoss;
-  }
-
-  window.showDetails = (day) => {
-    const preview = document.getElementById('notesPreview');
-    preview.innerHTML = '';
-    if (trades[day]) {
-      const data = trades[day];
-      let html = '<strong>Profit/Loss:</strong> ' + data.profitLoss + '<br><strong>Notes:</strong> ' + (data.notes||'No details') + '<br>';
-      ['weekly','daily','fourhr','onehr','fifteenm','threemin','onemin'].forEach(tf => {
-        if (data.screenshots && data.screenshots[tf]) {
-          html += `<img src="${data.screenshots[tf]}" class="image-preview" onclick="zoomImage('${data.screenshots[tf]}')">`;
-        }
-      });
-      preview.innerHTML = html;
-    } else {
-      preview.innerHTML = '<em>No trade this day.</em>';
-    }
-  }
-
-  window.zoomImage = (src) => {
-    document.getElementById('zoom-img').src = src;
-    document.getElementById('image-zoom').style.display='flex';
-  }
-
-  window.openModal = (day) => {
-    selectedDate = day;
-    document.getElementById('modal-date').textContent = day;
-    document.getElementById('profitLossInput').value = trades[day]?.profitLoss||'';
-    document.getElementById('notesInput').value = trades[day]?.notes||'';
-    document.getElementById('modal').style.display='block';
-  }
-
-  window.closeModal = () => document.getElementById('modal').style.display='none';
-
-  async function toBase64(file) {
-    return new Promise(res => {
-      const reader = new FileReader();
-      reader.onload = e => res(e.target.result); reader.readAsDataURL(file);
-    });
-  }
-
-  window.saveTrade = async () => {
-    const profitLoss = parseFloat(document.getElementById('profitLossInput').value) || 0;
-    const notes = document.getElementById('notesInput').value;
-    const screenshots = {};
-    for (let tf of ['weekly','daily','fourhr','onehr','fifteenm','threemin','onemin']) {
-      const file = document.getElementById(tf+'Input').files[0];
-      if (file) screenshots[tf] = await toBase64(file); else if (trades[selectedDate]?.screenshots?.[tf]) screenshots[tf] = trades[selectedDate].screenshots[tf];
-    }
-    trades[selectedDate] = { profitLoss, notes, screenshots };
-    colorCell(selectedDate, profitLoss);
-    await setDoc(doc(db,"trades",String(selectedDate)), trades[selectedDate]);
-    closeModal();
-    renderWinrateChart();
-  }
-
-  window.prevMonth = () => { currentMonth--; if(currentMonth<0){currentMonth=11;currentYear--;} buildCalendar(currentYear,currentMonth); loadData(); }
-  window.nextMonth = () => { currentMonth++; if(currentMonth>11){currentMonth=0;currentYear++;} buildCalendar(currentYear,currentMonth); loadData(); }
-
-  async function loadData() {
-    trades = {};
-    const snapshot = await getDocs(collection(db,"trades"));
-    snapshot.docs.forEach(docSnap=>{
-      trades[docSnap.id]=docSnap.data();
-      colorCell(docSnap.id, docSnap.data().profitLoss);
-    });
-    renderWinrateChart();
-  }
-
-  function renderWinrateChart() {
-    let wins=0, losses=0, noTrades=0;
-    for(let d=1; d<=31; d++){
-      if(!document.getElementById('date-'+d)) continue;
-      if(!trades[d]) { noTrades++; continue; }
-      if(trades[d].profitLoss>0) wins++;
-      else if(trades[d].profitLoss<0) losses++;
-      else noTrades++;
-    }
-    if(winRateChart) winRateChart.destroy();
-    winRateChart = new Chart(document.getElementById('winrate-chart').getContext('2d'), {
-      type:'pie',
-      data:{ labels:['Wins','Losses','No trade'], datasets:[{ data:[wins,losses,noTrades], backgroundColor:['green','red','gray']} ] }
-    });
-  }
-
-  // Paste listener
-  document.getElementById('modal').addEventListener('paste', async e => {
-    const files = Array.from(e.clipboardData.items).filter(it=>it.kind==='file'&&it.type.startsWith('image/')).map(it=>it.getAsFile());
-    if (files.length) {
-      const inputs=['weeklyInput','dailyInput','fourhrInput','onehrInput','fifteenmInput','threeminInput','oneminInput'];
-      for(let input of inputs){
-        if(document.getElementById(input).files.length===0){
-          const dt=new DataTransfer(); dt.items.add(files[0]);
-          document.getElementById(input).files=dt.files;
-          alert(`Image pasted into ${input}.`);
-          break;
-        }
+    const totalTrades = wins + losses + breakEvens; chartLegend.innerHTML = '';
+    if (totalTrades === 0) { winRateChart.style.background = 'var(--be-color)'; chartLegend.innerHTML = '<li>No trade data for this month.</li>'; return; }
+    const winPercent = (wins / totalTrades) * 100; const lossPercent = (losses / totalTrades) * 100;
+    const winAngle = winPercent; const lossAngle = winPercent + lossPercent;
+    winRateChart.style.background = `conic-gradient(var(--win-color) 0% ${winAngle}%, var(--loss-color) ${winAngle}% ${lossAngle}%, var(--be-color) ${lossAngle}% 100%)`;
+    const legendItems = [
+      { label: `Wins: ${wins}`, value: winPercent, color: 'var(--win-color)' },
+      { label: `Losses: ${losses}`, value: lossPercent, color: 'var(--loss-color)' },
+      { label: `Break Even: ${breakEvens}`, value: 100 - winPercent - lossPercent, color: 'var(--be-color)' }
+    ];
+    legendItems.forEach(item => { const li = document.createElement('li'); li.innerHTML = `<span class="legend-color" style="background-color: ${item.color};"></span> ${item.label} (${item.value.toFixed(1)}%)`; chartLegend.appendChild(li); });
+}
+function showPreview(dateStr) {
+  const dayData = loadData()[dateStr]; previewDate.textContent = new Date(dateStr + 'T00:00:00').toDateString();
+  previewDetails.textContent = dayData ? dayData.details : 'No trade details for this day.'; previewImages.innerHTML = '';
+  if (dayData && dayData.images) {
+    for (const tf in dayData.images) {
+      if(dayData.images[tf]) {
+        const thumbContainer = document.createElement('div'); thumbContainer.className = 'preview-thumb-container';
+        const tfLabel = document.createElement('span'); tfLabel.textContent = tf.toUpperCase();
+        const img = document.createElement('img'); img.src = dayData.images[tf];
+        img.addEventListener('click', () => { zoomImg.src = img.src; zoomOverlay.style.display = 'flex'; });
+        thumbContainer.appendChild(img); thumbContainer.appendChild(tfLabel); previewImages.appendChild(thumbContainer);
       }
     }
+  }
+}
+function openModal(dateStr) {
+  selectedDate = dateStr; const dayData = loadData()[dateStr] || { pl: 0, details: '', images: {} };
+  modalDate.textContent = new Date(dateStr + 'T00:00:00').toDateString(); plInput.value = dayData.pl; detailsInput.value = dayData.details;
+  imageInputsContainer.innerHTML = '';
+  timeframes.forEach(tf => {
+    const dropzone = document.createElement('div'); dropzone.className = 'image-dropzone'; dropzone.dataset.timeframe = tf;
+    const label = document.createElement('div'); label.className = 'timeframe-label'; label.textContent = tf.toUpperCase();
+    const hint = document.createElement('div'); hint.className = 'paste-hint'; hint.textContent = 'Click & Paste';
+    const img = document.createElement('img'); const delBtn = document.createElement('button'); delBtn.className = 'delete-img-btn';
+    delBtn.innerHTML = '×'; delBtn.onclick = (e) => { e.stopPropagation(); img.src = ''; dropzone.classList.remove('has-image'); };
+    dropzone.append(label, img, hint, delBtn); imageInputsContainer.appendChild(dropzone);
+    if (dayData.images && dayData.images[tf]) { img.src = dayData.images[tf]; dropzone.classList.add('has-image'); }
+    dropzone.addEventListener('click', () => { document.querySelectorAll('.image-dropzone').forEach(dz => dz.classList.remove('paste-target')); dropzone.classList.add('paste-target'); activePasteTarget = dropzone; });
   });
+  modalBg.style.display = 'flex'; plInput.focus();
+}
+function closeModal() { modalBg.style.display = 'none'; selectedDate = null; activePasteTarget = null; }
 
-  buildCalendar(currentYear,currentMonth); loadData();
+// --- EVENT LISTENERS ---
+document.getElementById('cancelBtn').onclick = closeModal;
+document.getElementById('saveBtn').onclick = () => {
+  if (!selectedDate) return; const pl = parseFloat(plInput.value) || 0; const details = detailsInput.value.trim(); const data = loadData();
+  if (!data[selectedDate]) { data[selectedDate] = { pl: 0, details: '', images: {} }; }
+  data[selectedDate].pl = pl; data[selectedDate].details = details;
+  document.querySelectorAll('.image-dropzone').forEach(dz => {
+      const tf = dz.dataset.timeframe; const img = dz.querySelector('img');
+      if (img.src && img.src.startsWith('data:image')) { data[selectedDate].images[tf] = img.src; }
+      else if (!img.src) { delete data[selectedDate].images[tf]; }
+  });
+  saveData(data); closeModal(); renderCalendar();
+};
+document.getElementById('prevMonth').onclick = () => { current.setMonth(current.getMonth() - 1); renderCalendar(); };
+document.getElementById('nextMonth').onclick = () => { current.setMonth(current.getMonth() + 1); renderCalendar(); };
+modalBg.addEventListener('click', e => { if (e.target === modalBg) closeModal(); });
+zoomOverlay.addEventListener('click', () => zoomOverlay.style.display = 'none');
+modalBg.addEventListener('paste', e => {
+  if (!activePasteTarget) { alert("Please click on a timeframe box before pasting an image."); return; }
+  const items = e.clipboardData.items;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith('image/')) {
+      e.preventDefault(); const file = items[i].getAsFile(); const reader = new FileReader();
+      reader.onload = e2 => { const imgEl = activePasteTarget.querySelector('img'); imgEl.src = e2.target.result; activePasteTarget.classList.add('has-image'); };
+      reader.readAsDataURL(file); break;
+    }
+  }
+});
+
+// --- NEW: EXPORT/IMPORT LOGIC ---
+exportBtn.addEventListener('click', () => {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (!data || data === '{}') {
+        alert("No journal data to export.");
+        return;
+    }
+    const blob = new Blob([data], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trade_journal_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+importBtn.addEventListener('click', () => {
+    importFile.click(); // Open the file picker
+});
+
+importFile.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (confirm("Are you sure you want to import this file? This will OVERWRITE any data currently in your journal.")) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                // Basic validation to see if it looks like our data
+                if (typeof importedData === 'object' && importedData !== null) {
+                    localStorage.setItem(STORAGE_KEY, e.target.result);
+                    alert("Import successful! The page will now reload.");
+                    location.reload(); // Reload the page to apply all changes
+                } else {
+                    throw new Error("Invalid file format.");
+                }
+            } catch (err) {
+                alert("Error: Could not import file. It may be corrupted or in the wrong format.");
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    }
+    // Reset the file input so you can import the same file again if needed
+    event.target.value = ''; 
+});
+
+// --- INITIAL LOAD ---
+renderCalendar();
 </script>
+
 </body>
 </html>
