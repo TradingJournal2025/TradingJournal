@@ -1,38 +1,3 @@
-That is an excellent and very important question. It gets to the core difference between the two versions we've discussed.
-
-With the current code for GitHub Pages (which uses localStorage), the answer is: No, your data will NOT automatically sync between different devices.
-
-Why It Doesn't Sync
-
-localStorage is Device-Specific: The data is saved directly inside the web browser you are using (e.g., Chrome on your laptop). It's like a small filing cabinet that only that specific browser can open.
-
-No Central Server: When you go to the journal on your phone, its browser has its own, separate, empty filing cabinet. There is no central cloud server connecting the two.
-
-In short: Data you enter on your laptop will stay on your laptop. Data you enter on your phone will stay on your phone.
-
-The Solution: Manual Export & Import
-
-While it can't sync automatically, we can add a very effective manual solution: Export/Import buttons.
-
-This is the best way to move your data between devices while still using the simple GitHub Pages hosting.
-
-Here is how it would work:
-
-On Device A (e.g., your PC): You finish adding trades for the day. You click an "Export Journal" button. Your browser will download a single file (e.g., journal_backup.json) containing all of your data.
-
-Transfer the File: You send this file to your other device. You can email it to yourself, use Google Drive, Dropbox, iCloud, or a USB stick.
-
-On Device B (e.g., your Laptop): You open the journal website. You click an "Import Journal" button, select the journal_backup.json file you just transferred, and it will load everything. Your laptop's browser is now perfectly in sync with your PC.
-
-This method is secure, private, and gives you full control over your data.
-
-Upgraded Code with Export/Import
-
-I have added the Export and Import functionality to the previous code. This is the version you should use for GitHub.
-
-Replace your index.html file on GitHub with this complete code:
-
-Generated html
 <!DOCTYPE html>
 <html lang="en">
 <head>
