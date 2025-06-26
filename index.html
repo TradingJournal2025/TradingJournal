@@ -1,201 +1,169 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Forex Trade Calendar (Firestore Sync)</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Trading Journal Calendar</title>
 <style>
-  body { font-family: Arial,sans-serif; background:#1e1e1e; color:#ddd; padding:20px; max-width:900px; margin:auto; }
-  .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
-  .calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
-  .day { border:1px solid #333; min-height:80px; padding:4px; position:relative; cursor:pointer; background:#2a2a2a; }
-  .day:hover { outline:1px solid #666; }
-  .date { position:absolute; top:4px; right:4px; font-size:0.8em; color:#aaa; }
-  .pl { font-size:1.1em; font-weight:bold; }
-  .modal-bg, .zoom-overlay {
-    position:fixed; top:0; left:0; width:100%; height:100%;
-    background:rgba(0,0,0,0.7); display:none; justify-content:center; align-items:center;
-  }
-  .modal { background:#333; padding:20px; border-radius:6px; width:90%; max-width:400px; }
-  .modal h2 { margin-top:0; }
-  .modal input, .modal textarea {
-    width:100%; padding:6px; margin:4px 0 10px; background:#222; border:1px solid #555; color:#ddd;
-  }
-  .modal label { font-size:0.9em; color:#ccc; }
-  .actions { text-align:right; }
-  .actions button { padding:6px 12px; margin-left:5px; background:#444; border:none; color:#ddd; cursor:pointer; }
-  #hoverPreview { border-top:1px solid #555; padding-top:10px; margin-top:10px; }
-  #hoverPreview img { max-height:100px; cursor:zoom-in; border:1px solid #444; margin-top:8px; }
-  .zoom-overlay img { max-width:90%; max-height:90%; cursor:zoom-out; }
-  #deleteImageBtn { margin-bottom:10px; }
+  body { background: #121212; color: #e0e0e0; font-family: Arial, sans-serif; }
+  h1 { text-align: center; color: #ffffff; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th, td { border: 1px solid #444; height: 100px; vertical-align: top; padding: 5px; cursor: pointer; }
+  th { background: #222; color: #ccc; }
+  td.green { background: rgba(0, 200, 0, 0.3); }
+  td.red { background: rgba(200, 0, 0, 0.3); }
+  td.white { background: rgba(255, 255, 255, 0.1); }
+  .tooltip { position: absolute; background: #333; padding: 10px; border: 1px solid #555; border-radius: 4px; z-index: 999; display: none; max-width: 300px; }
+  .image-preview { max-width: 80px; max-height: 80px; cursor: pointer; margin: 2px; }
+  .image-zoom { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
+  .image-zoom img { max-width: 90%; max-height: 90%; }
+  #modal { position: fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#222; padding:20px; border:1px solid #555; z-index:1001; display:none; width: 300px; max-height: 90vh; overflow-y:auto; }
+  label { display: block; margin: 8px 0 4px; }
+  input, textarea { width: 100%; padding: 4px; background: #333; color: #fff; border: 1px solid #555; }
+  button { background: #444; color: #fff; border: none; padding: 6px 10px; margin: 5px 0; cursor: pointer; }
 </style>
 </head>
 <body>
+<h1>Trading Journal Calendar</h1>
+<table id="calendar"></table>
+<div id="tooltip" class="tooltip"></div>
+<div id="image-zoom" class="image-zoom" onclick="this.style.display='none'"><img id="zoom-img" /></div>
 
-<!-- HEADER -->
-<div class="header">
-  <button id="prevMonth">&lt;</button>
-  <h1 id="monthLabel"></h1>
-  <button id="nextMonth">&gt;</button>
+<!-- Modal -->
+<div id="modal">
+  <h3>Trade Details for <span id="modal-date"></span></h3>
+  <label>Profit/Loss ($): <input id="profitLossInput" type="number" step="0.01"></label>
+  <label>Notes:<textarea id="notesInput"></textarea></label>
+  <label>Weekly TF:<input id="weeklyInput" type="file" accept="image/*"></label>
+  <label>Daily TF:<input id="dailyInput" type="file" accept="image/*"></label>
+  <label>4hr TF:<input id="fourhrInput" type="file" accept="image/*"></label>
+  <label>1hr TF:<input id="onehrInput" type="file" accept="image/*"></label>
+  <label>15m TF:<input id="fifteenmInput" type="file" accept="image/*"></label>
+  <label>3m TF:<input id="threeminInput" type="file" accept="image/*"></label>
+  <label>1m TF:<input id="oneminInput" type="file" accept="image/*"></label>
+  <button onclick="saveTrade()">Save</button>
+  <button onclick="closeModal()">Close</button>
 </div>
 
-<!-- CALENDAR -->
-<div class="calendar" id="calendar"></div>
-
-<!-- PREVIEW -->
-<div id="hoverPreview">
-  <h3>Preview</h3>
-  <div id="previewDate"></div>
-  <div id="previewDetails"></div>
-  <img id="previewImg" style="display:none;" />
-</div>
-
-<!-- MODAL -->
-<div class="modal-bg" id="modalBg" tabindex="0">
-  <div class="modal">
-    <h2 id="modalDate"></h2>
-    <label>Total Profit/Loss:</label>
-    <input type="number" id="plInput" step="0.01" />
-    <label>Trade Details ("NO TRADE" if none):</label>
-    <textarea id="detailsInput"></textarea>
-    <button id="deleteImageBtn" style="display:none;">Delete Current Image</button>
-    <p style="font-size:0.85em; color:#ccc;">You can also paste an image here (Ctrl+V).</p>
-    <div class="actions">
-      <button id="cancelBtn">Cancel</button>
-      <button id="saveBtn">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- ZOOM -->
-<div class="zoom-overlay" id="zoomOverlay"><img id="zoomImg" src="" /></div>
-
-<!-- FIREBASE + APP SCRIPT -->
-<script type="module">
-  // ✅ Firebase imports
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-  import { getFirestore, collection, doc, setDoc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-  // ✅ Your Firebase config
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
+<script>
   const firebaseConfig = {
-    apiKey: "AIzaSyA2WEvj1pqPkmgEU5a2yuzgPNCShlviqRI",
-    authDomain: "trading-journal-raysuuu.firebaseapp.com",
-    projectId: "trading-journal-raysuuu",
-    storageBucket: "trading-journal-raysuuu.firebasestorage.app",
-    messagingSenderId: "205166502407",
-    appId: "1:205166502407:web:19b0217e8b063ab14440a2",
-    measurementId: "G-5BCH0D9CZQ"
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
   };
-  const app = initializeApp(firebaseConfig);
-  const db = getFirestore(app);
+  const app = firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
 
-  // State
-  let current = new Date();
+  const currentDate = new Date();
+  let trades = {};
   let selectedDate = null;
-  let pastedImage = null;
-  let tradeData = {};
 
-  // Elements
-  const calendarEl = document.getElementById('calendar');
-  const previewDate = document.getElementById('previewDate');
-  const previewDetails = document.getElementById('previewDetails');
-  const previewImg = document.getElementById('previewImg');
-  const modalBg = document.getElementById('modalBg');
-  const modalDate = document.getElementById('modalDate');
-  const plInput = document.getElementById('plInput');
-  const detailsInput = document.getElementById('detailsInput');
-  const deleteImageBtn = document.getElementById('deleteImageBtn');
-  const zoomOverlay = document.getElementById('zoomOverlay');
-  const zoomImg = document.getElementById('zoomImg');
+  const tooltip = document.getElementById('tooltip');
 
-  // 📂 Firestore collection path
-  const userTrades = collection(db, "trades"); // NOTE: if you add auth, you'd put userTrades = collection(db,"users/userId/trades")
+  function buildCalendar(year, month) {
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month+1, 0).getDate();
+    let table = '<tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>';
+    let dayCount = 1;
+    for (let row = 0; row < 6; row++) {
+      table += '<tr>';
+      for (let col = 0; col < 7; col++) {
+        if (row===0 && col < firstDay || dayCount > daysInMonth) {
+          table += '<td class="white"></td>';
+        } else {
+          table += `<td id="date-${dayCount}" class="white" onmouseenter="showTooltip(${dayCount})" onmouseleave="hideTooltip()" onclick="openModal(${dayCount})">${dayCount}</td>`;
+          dayCount++;
+        }
+      }
+      table += '</tr>';
+    }
+    document.getElementById('calendar').innerHTML = table;
+  }
+
+  function colorCell(day, profitLoss) {
+    const cell = document.getElementById('date-'+day);
+    if (!cell) return;
+    if (profitLoss > 0) cell.className = 'green';
+    else if (profitLoss < 0) cell.className = 'red';
+    else cell.className = 'white';
+  }
 
   async function loadData() {
-    tradeData = {};
-    const querySnapshot = await getDocs(userTrades);
-    querySnapshot.forEach(docSnap => {
-      tradeData[docSnap.id] = docSnap.data();
+    const snapshot = await db.collection('trades').get();
+    snapshot.docs.forEach(doc => {
+      trades[doc.id] = doc.data();
+      colorCell(doc.id, doc.data().profitLoss);
     });
-    renderCalendar();
   }
 
-  function renderCalendar() {
-    calendarEl.innerHTML='';
-    const year=current.getFullYear();
-    const month=current.getMonth();
-    document.getElementById('monthLabel').textContent=current.toLocaleString('default',{month:'long',year:'numeric'});
-    const firstDay=new Date(year,month,1);
-    const startWeekday=firstDay.getDay();
-    const daysInMonth=new Date(year,month+1,0).getDate();
-
-    for (let i=0;i<startWeekday;i++){
-      let blank=document.createElement('div'); blank.classList.add('day'); blank.style.opacity='0.2'; calendarEl.appendChild(blank);
-    }
-    for (let d=1; d<=daysInMonth; d++){
-      const cell=document.createElement('div'); cell.classList.add('day');
-      const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      cell.dataset.date=dateStr;
-      let label=document.createElement('div'); label.classList.add('date'); label.textContent=d; cell.appendChild(label);
-
-      if(tradeData[dateStr]){
-        let pl=tradeData[dateStr].pl;
-        let plEl=document.createElement('div'); plEl.classList.add('pl'); plEl.textContent=(pl>=0?'+':'')+pl.toFixed(2); cell.appendChild(plEl);
-        if(pl>0) cell.style.background='#145a32';
-        else if(pl<0) cell.style.background='#641e16';
-      }
-      cell.addEventListener('click',()=>openModal(dateStr));
-      cell.addEventListener('mouseenter',()=>showPreview(dateStr));
-      calendarEl.appendChild(cell);
+  function showTooltip(day) {
+    if (trades[day]) {
+      const data = trades[day];
+      let html = '<strong>Notes:</strong> ' + (data.notes||'No details') + '<br>';
+      ['weekly','daily','fourhr','onehr','fifteenm','threemin','onemin'].forEach(tf => {
+        if (data.screenshots && data.screenshots[tf]) {
+          html += `<img src="${data.screenshots[tf]}" class="image-preview" onclick="zoomImage('${data.screenshots[tf]}')">`;
+        }
+      });
+      tooltip.innerHTML = html;
+      tooltip.style.display = 'block';
+      tooltip.style.left = event.pageX + 'px';
+      tooltip.style.top = event.pageY + 'px';
+    } else {
+      tooltip.style.display = 'none';
     }
   }
 
-  function showPreview(dateStr) {
-    previewDate.textContent=new Date(dateStr).toDateString();
-    previewDetails.textContent=tradeData[dateStr]?.details||'';
-    previewImg.src=tradeData[dateStr]?.img||'';
-    previewImg.style.display=tradeData[dateStr]?.img?'block':'none';
+  function hideTooltip() { tooltip.style.display = 'none'; }
+
+  function zoomImage(src) {
+    document.getElementById('zoom-img').src = src;
+    document.getElementById('image-zoom').style.display = 'flex';
   }
 
-  function openModal(dateStr) {
-    selectedDate=dateStr; pastedImage=null;
-    modalDate.textContent=new Date(dateStr).toDateString();
-    plInput.value=tradeData[dateStr]?.pl||0;
-    detailsInput.value=tradeData[dateStr]?.details||'';
-    deleteImageBtn.style.display=tradeData[dateStr]?.img?'inline-block':'none';
-    modalBg.style.display='flex'; plInput.focus();
+  function openModal(day) {
+    selectedDate = day;
+    document.getElementById('modal-date').textContent = day;
+    document.getElementById('profitLossInput').value = trades[day]?.profitLoss||'';
+    document.getElementById('notesInput').value = trades[day]?.notes||'';
+    ['weekly','daily','fourhr','onehr','fifteenm','threemin','onemin'].forEach(tf => {
+      document.getElementById(tf+'Input').value = '';
+    });
+    document.getElementById('modal').style.display = 'block';
   }
-  function closeModal() { modalBg.style.display='none'; selectedDate=null; pastedImage=null; }
+
+  function closeModal() { document.getElementById('modal').style.display = 'none'; }
 
   async function saveTrade() {
-    const pl=parseFloat(plInput.value)||0;
-    const details=detailsInput.value.trim();
-    let entry={pl, details, img: tradeData[selectedDate]?.img||''};
-    if(pastedImage) entry.img=pastedImage;
-    await setDoc(doc(userTrades,selectedDate), entry); closeModal(); loadData();
-  }
-  document.getElementById('saveBtn').onclick=saveTrade;
-  document.getElementById('cancelBtn').onclick=closeModal;
-  deleteImageBtn.onclick=()=> { tradeData[selectedDate].img=''; deleteImageBtn.style.display='none'; }
-
-  document.getElementById('prevMonth').onclick=()=>{ current.setMonth(current.getMonth()-1); renderCalendar(); };
-  document.getElementById('nextMonth').onclick=()=>{ current.setMonth(current.getMonth()+1); renderCalendar(); };
-  previewImg.addEventListener('click',()=>{ if(previewImg.src){ zoomImg.src=previewImg.src; zoomOverlay.style.display='flex'; }});
-  zoomOverlay.addEventListener('click',()=>zoomOverlay.style.display='none');
-
-  // Handle pasted image
-  modalBg.addEventListener('paste',e=>{
-    if(!selectedDate) return;
-    for(const item of e.clipboardData.items){
-      if(item.type.startsWith('image/')){
-        const file=item.getAsFile();
-        const reader=new FileReader();
-        reader.onload=e2=>{ pastedImage=e2.target.result; deleteImageBtn.style.display='inline-block'; };
-        reader.readAsDataURL(file);
-      }
+    const profitLoss = parseFloat(document.getElementById('profitLossInput').value) || 0;
+    const notes = document.getElementById('notesInput').value;
+    const screenshots = {};
+    for (let tf of ['weekly','daily','fourhr','onehr','fifteenm','threemin','onemin']) {
+      const file = document.getElementById(tf+'Input').files[0];
+      if (file) screenshots[tf] = await toBase64(file);
+      else if (trades[selectedDate]?.screenshots[tf]) screenshots[tf] = trades[selectedDate].screenshots[tf];
     }
-  });
+    trades[selectedDate] = { profitLoss, notes, screenshots };
+    colorCell(selectedDate, profitLoss);
+    await db.collection('trades').doc(String(selectedDate)).set(trades[selectedDate]);
+    closeModal();
+  }
 
-  // Load existing data
+  function toBase64(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  buildCalendar(currentDate.getFullYear(), currentDate.getMonth());
   loadData();
 </script>
 </body>
