@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Forex Trade Calendar (Firestore Sync)</title>
+<style>
+  body { font-family: Arial,sans-serif; background:#1e1e1e; color:#ddd; padding:20px; max-width:900px; margin:auto; }
+  .header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .calendar { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+  .day { border:1px solid #333; min-height:80px; padding:4px; position:relative; cursor:pointer; background:#2a2a2a; }
+  .day:hover { outline:1px solid #666; }
+  .date { position:absolute; top:4px; right:4px; font-size:0.8em; color:#aaa; }
+  .pl { font-size:1.1em; font-weight:bold; }
+  .modal-bg, .zoom-overlay {
+    position:fixed; top:0; left:0; width:100%; height:100%;
+    background:rgba(0,0,0,0.7); display:none; justify-content:center; align-items:center;
+  }
+  .modal { background:#333; padding:20px; border-radius:6px; width:90%; max-width:400px; }
+  .modal h2 { margin-top:0; }
+  .modal input, .modal textarea {
+    width:100%; padding:6px; margin:4px 0 10px; background:#222; border:1px solid #555; color:#ddd;
+  }
+  .modal label { font-size:0.9em; color:#ccc; }
+  .actions { text-align:right; }
+  .actions button { padding:6px 12px; margin-left:5px; background:#444; border:none; color:#ddd; cursor:pointer; }
+  #hoverPreview { border-top:1px solid #555; padding-top:10px; margin-top:10px; }
+  #hoverPreview img { max-height:100px; cursor:zoom-in; border:1px solid #444; margin-top:8px; }
+  .zoom-overlay img { max-width:90%; max-height:90%; cursor:zoom-out; }
+  #deleteImageBtn { margin-bottom:10px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <button id="prevMonth">&lt;</button>
+  <h1 id="monthLabel"></h1>
+  <button id="nextMonth">&gt;</button>
+</div>
+
+<!-- CALENDAR -->
+<div class="calendar" id="calendar"></div>
+
+<!-- PREVIEW -->
+<div id="hoverPreview">
+  <h3>Preview</h3>
+  <div id="previewDate"></div>
+  <div id="previewDetails"></div>
+  <img id="previewImg" style="display:none;" />
+</div>
+
+<!-- MODAL -->
+<div class="modal-bg" id="modalBg" tabindex="0">
+  <div class="modal">
+    <h2 id="modalDate"></h2>
+    <label>Total Profit/Loss:</label>
+    <input type="number" id="plInput" step="0.01" />
+    <label>Trade Details ("NO TRADE" if none):</label>
+    <textarea id="detailsInput"></textarea>
+    <button id="deleteImageBtn" style="display:none;">Delete Current Image</button>
+    <p style="font-size:0.85em; color:#ccc;">You can also paste an image here (Ctrl+V).</p>
+    <div class="actions">
+      <button id="cancelBtn">Cancel</button>
+      <button id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ZOOM -->
+<div class="zoom-overlay" id="zoomOverlay"><img id="zoomImg" src="" /></div>
+
+<!-- FIREBASE + APP SCRIPT -->
+<script type="module">
+  // ✅ Firebase imports
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+  import { getFirestore, collection, doc, setDoc, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+  // ✅ Your Firebase config
+  const firebaseConfig = {
+    apiKey: "AIzaSyA2WEvj1pqPkmgEU5a2yuzgPNCShlviqRI",
+    authDomain: "trading-journal-raysuuu.firebaseapp.com",
+    projectId: "trading-journal-raysuuu",
+    storageBucket: "trading-journal-raysuuu.firebasestorage.app",
+    messagingSenderId: "205166502407",
+    appId: "1:205166502407:web:19b0217e8b063ab14440a2",
+    measurementId: "G-5BCH0D9CZQ"
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  // State
+  let current = new Date();
+  let selectedDate = null;
+  let pastedImage = null;
+  let tradeData = {};
+
+  // Elements
+  const calendarEl = document.getElementById('calendar');
+  const previewDate = document.getElementById('previewDate');
+  const previewDetails = document.getElementById('previewDetails');
+  const previewImg = document.getElementById('previewImg');
+  const modalBg = document.getElementById('modalBg');
+  const modalDate = document.getElementById('modalDate');
+  const plInput = document.getElementById('plInput');
+  const detailsInput = document.getElementById('detailsInput');
+  const deleteImageBtn = document.getElementById('deleteImageBtn');
+  const zoomOverlay = document.getElementById('zoomOverlay');
+  const zoomImg = document.getElementById('zoomImg');
+
+  // 📂 Firestore collection path
+  const userTrades = collection(db, "trades"); // NOTE: if you add auth, you'd put userTrades = collection(db,"users/userId/trades")
+
+  async function loadData() {
+    tradeData = {};
+    const querySnapshot = await getDocs(userTrades);
+    querySnapshot.forEach(docSnap => {
+      tradeData[docSnap.id] = docSnap.data();
+    });
+    renderCalendar();
+  }
+
+  function renderCalendar() {
+    calendarEl.innerHTML='';
+    const year=current.getFullYear();
+    const month=current.getMonth();
+    document.getElementById('monthLabel').textContent=current.toLocaleString('default',{month:'long',year:'numeric'});
+    const firstDay=new Date(year,month,1);
+    const startWeekday=firstDay.getDay();
+    const daysInMonth=new Date(year,month+1,0).getDate();
+
+    for (let i=0;i<startWeekday;i++){
+      let blank=document.createElement('div'); blank.classList.add('day'); blank.style.opacity='0.2'; calendarEl.appendChild(blank);
+    }
+    for (let d=1; d<=daysInMonth; d++){
+      const cell=document.createElement('div'); cell.classList.add('day');
+      const dateStr=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cell.dataset.date=dateStr;
+      let label=document.createElement('div'); label.classList.add('date'); label.textContent=d; cell.appendChild(label);
+
+      if(tradeData[dateStr]){
+        let pl=tradeData[dateStr].pl;
+        let plEl=document.createElement('div'); plEl.classList.add('pl'); plEl.textContent=(pl>=0?'+':'')+pl.toFixed(2); cell.appendChild(plEl);
+        if(pl>0) cell.style.background='#145a32';
+        else if(pl<0) cell.style.background='#641e16';
+      }
+      cell.addEventListener('click',()=>openModal(dateStr));
+      cell.addEventListener('mouseenter',()=>showPreview(dateStr));
+      calendarEl.appendChild(cell);
+    }
+  }
+
+  function showPreview(dateStr) {
+    previewDate.textContent=new Date(dateStr).toDateString();
+    previewDetails.textContent=tradeData[dateStr]?.details||'';
+    previewImg.src=tradeData[dateStr]?.img||'';
+    previewImg.style.display=tradeData[dateStr]?.img?'block':'none';
+  }
+
+  function openModal(dateStr) {
+    selectedDate=dateStr; pastedImage=null;
+    modalDate.textContent=new Date(dateStr).toDateString();
+    plInput.value=tradeData[dateStr]?.pl||0;
+    detailsInput.value=tradeData[dateStr]?.details||'';
+    deleteImageBtn.style.display=tradeData[dateStr]?.img?'inline-block':'none';
+    modalBg.style.display='flex'; plInput.focus();
+  }
+  function closeModal() { modalBg.style.display='none'; selectedDate=null; pastedImage=null; }
+
+  async function saveTrade() {
+    const pl=parseFloat(plInput.value)||0;
+    const details=detailsInput.value.trim();
+    let entry={pl, details, img: tradeData[selectedDate]?.img||''};
+    if(pastedImage) entry.img=pastedImage;
+    await setDoc(doc(userTrades,selectedDate), entry); closeModal(); loadData();
+  }
+  document.getElementById('saveBtn').onclick=saveTrade;
+  document.getElementById('cancelBtn').onclick=closeModal;
+  deleteImageBtn.onclick=()=> { tradeData[selectedDate].img=''; deleteImageBtn.style.display='none'; }
+
+  document.getElementById('prevMonth').onclick=()=>{ current.setMonth(current.getMonth()-1); renderCalendar(); };
+  document.getElementById('nextMonth').onclick=()=>{ current.setMonth(current.getMonth()+1); renderCalendar(); };
+  previewImg.addEventListener('click',()=>{ if(previewImg.src){ zoomImg.src=previewImg.src; zoomOverlay.style.display='flex'; }});
+  zoomOverlay.addEventListener('click',()=>zoomOverlay.style.display='none');
+
+  // Handle pasted image
+  modalBg.addEventListener('paste',e=>{
+    if(!selectedDate) return;
+    for(const item of e.clipboardData.items){
+      if(item.type.startsWith('image/')){
+        const file=item.getAsFile();
+        const reader=new FileReader();
+        reader.onload=e2=>{ pastedImage=e2.target.result; deleteImageBtn.style.display='inline-block'; };
+        reader.readAsDataURL(file);
+      }
+    }
+  });
+
+  // Load existing data
+  loadData();
+</script>
+</body>
+</html>
