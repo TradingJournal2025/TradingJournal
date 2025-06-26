@@ -6,9 +6,9 @@
 <title>Trading Journal Calendar</title>
 <style>
   body { background: #121212; color: #e0e0e0; font-family: Arial, sans-serif; }
-  h1 { text-align: center; color: #ffffff; }
+  h1 { text-align: center; color: #fff; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-  th, td { border: 1px solid #444; height: 100px; vertical-align: top; padding: 5px; cursor: pointer; }
+  th, td { border: 1px solid #444; padding: 5px; cursor: pointer; vertical-align: top; height: 100px; }
   th { background: #222; color: #ccc; }
   td.green { background: rgba(0, 200, 0, 0.3); }
   td.red { background: rgba(200, 0, 0, 0.3); }
@@ -17,10 +17,10 @@
   .image-preview { max-width: 80px; max-height: 80px; cursor: pointer; margin: 2px; }
   .image-zoom { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); display: none; align-items: center; justify-content: center; z-index: 1000; }
   .image-zoom img { max-width: 90%; max-height: 90%; }
-  #modal { position: fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#222; padding:20px; border:1px solid #555; z-index:1001; display:none; width: 300px; max-height: 90vh; overflow-y:auto; }
-  label { display: block; margin: 8px 0 4px; }
-  input, textarea { width: 100%; padding: 4px; background: #333; color: #fff; border: 1px solid #555; }
-  button { background: #444; color: #fff; border: none; padding: 6px 10px; margin: 5px 0; cursor: pointer; }
+  #modal { position: fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#222; padding:20px; border:1px solid #555; z-index:1001; width:300px; max-height:90vh; overflow-y:auto; }
+  label { display:block; margin:8px 0 4px; }
+  input, textarea { width:100%; padding:4px; background:#333; color:#fff; border:1px solid #555; }
+  button { background:#444; color:#fff; border:none; padding:6px 10px; cursor:pointer; margin:5px 0; }
 </style>
 </head>
 <body>
@@ -45,20 +45,21 @@
   <button onclick="closeModal()">Close</button>
 </div>
 
-<!-- Firebase -->
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js"></script>
-<script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js";
+  import { getFirestore, collection, getDocs, doc, setDoc } from "https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js";
+
   const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyA2WEvj1pqPkmgEU5a2yuzgPNCShlviqRI",
+    authDomain: "trading-journal-raysuuu.firebaseapp.com",
+    projectId: "trading-journal-raysuuu",
+    storageBucket: "trading-journal-raysuuu.firebasestorage.app",
+    messagingSenderId: "205166502407",
+    appId: "1:205166502407:web:19b0217e8b063ab14440a2",
+    measurementId: "G-5BCH0D9CZQ"
   };
-  const app = firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
 
   const currentDate = new Date();
   let trades = {};
@@ -66,7 +67,7 @@
 
   const tooltip = document.getElementById('tooltip');
 
-  function buildCalendar(year, month) {
+  window.buildCalendar = function(year, month) {
     const firstDay = new Date(year, month, 1).getDay();
     const daysInMonth = new Date(year, month+1, 0).getDate();
     let table = '<tr><th>Sun</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Sat</th></tr>';
@@ -86,23 +87,21 @@
     document.getElementById('calendar').innerHTML = table;
   }
 
-  function colorCell(day, profitLoss) {
+  window.colorCell = function(day, profitLoss) {
     const cell = document.getElementById('date-'+day);
     if (!cell) return;
-    if (profitLoss > 0) cell.className = 'green';
-    else if (profitLoss < 0) cell.className = 'red';
-    else cell.className = 'white';
+    cell.className = profitLoss > 0 ? 'green' : profitLoss < 0 ? 'red' : 'white';
   }
 
-  async function loadData() {
-    const snapshot = await db.collection('trades').get();
-    snapshot.docs.forEach(doc => {
-      trades[doc.id] = doc.data();
-      colorCell(doc.id, doc.data().profitLoss);
+  window.loadData = async function() {
+    const snapshot = await getDocs(collection(db, "trades"));
+    snapshot.docs.forEach(docSnap => {
+      trades[docSnap.id] = docSnap.data();
+      colorCell(docSnap.id, docSnap.data().profitLoss);
     });
   }
 
-  function showTooltip(day) {
+  window.showTooltip = function(day) {
     if (trades[day]) {
       const data = trades[day];
       let html = '<strong>Notes:</strong> ' + (data.notes||'No details') + '<br>';
@@ -120,14 +119,14 @@
     }
   }
 
-  function hideTooltip() { tooltip.style.display = 'none'; }
+  window.hideTooltip = function() { tooltip.style.display = 'none'; }
 
-  function zoomImage(src) {
-    document.getElementById('zoom-img').src = src;
+  window.zoomImage = function(imgData) {
+    document.getElementById('zoom-img').src = imgData;
     document.getElementById('image-zoom').style.display = 'flex';
   }
 
-  function openModal(day) {
+  window.openModal = function(day) {
     selectedDate = day;
     document.getElementById('modal-date').textContent = day;
     document.getElementById('profitLossInput').value = trades[day]?.profitLoss||'';
@@ -138,29 +137,29 @@
     document.getElementById('modal').style.display = 'block';
   }
 
-  function closeModal() { document.getElementById('modal').style.display = 'none'; }
+  window.closeModal = function() { document.getElementById('modal').style.display = 'none'; }
 
-  async function saveTrade() {
+  async function toBase64(file) {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = e => resolve(e.target.result);
+      reader.readAsDataURL(file);
+    });
+  }
+
+  window.saveTrade = async function() {
     const profitLoss = parseFloat(document.getElementById('profitLossInput').value) || 0;
     const notes = document.getElementById('notesInput').value;
     const screenshots = {};
     for (let tf of ['weekly','daily','fourhr','onehr','fifteenm','threemin','onemin']) {
       const file = document.getElementById(tf+'Input').files[0];
       if (file) screenshots[tf] = await toBase64(file);
-      else if (trades[selectedDate]?.screenshots[tf]) screenshots[tf] = trades[selectedDate].screenshots[tf];
+      else if (trades[selectedDate]?.screenshots?.[tf]) screenshots[tf] = trades[selectedDate].screenshots[tf];
     }
     trades[selectedDate] = { profitLoss, notes, screenshots };
     colorCell(selectedDate, profitLoss);
-    await db.collection('trades').doc(String(selectedDate)).set(trades[selectedDate]);
+    await setDoc(doc(db, "trades", String(selectedDate)), trades[selectedDate]);
     closeModal();
-  }
-
-  function toBase64(file) {
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onload = e => resolve(e.target.result);
-      reader.readAsDataURL(file);
-    });
   }
 
   buildCalendar(currentDate.getFullYear(), currentDate.getMonth());
