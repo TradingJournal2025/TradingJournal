@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Forex Trade Calendar (with Export/Import)</title>
+<style>
+  :root {
+    --bg-primary: #1e1e1e; --bg-secondary: #2a2a2a; --bg-tertiary: #333;
+    --border-color: #444; --text-primary: #ddd; --text-secondary: #aaa;
+    --win-color: #27ae60; --win-bg: #145a32; --loss-color: #e74c3c;
+    --loss-bg: #641e16; --be-color: #7f8c8d; --accent-color: #3498db;
+  }
+  body {
+    font-family: Arial, sans-serif; background: var(--bg-primary); color: var(--text-primary);
+    padding: 20px; max-width: 1200px; margin: auto;
+  }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .data-actions {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      padding: 10px;
+      background: var(--bg-secondary);
+      border-radius: 5px;
+      justify-content: center;
+  }
+  .data-actions button {
+      padding: 8px 15px; border: none; border-radius: 4px; cursor: pointer;
+      background-color: var(--border-color); color: var(--text-primary);
+  }
+  #importBtn { background-color: var(--accent-color); }
+  #exportBtn { background-color: var(--win-color); }
+  .calendar-container { display: flex; gap: 30px; align-items: flex-start; }
+  .calendar { flex-grow: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+  .day {
+    border: 1px solid var(--border-color); min-height: 90px; padding: 5px; position: relative;
+    cursor: pointer; background: var(--bg-secondary); transition: outline 0.2s;
+  }
+  .day:hover { outline: 2px solid var(--accent-color); }
+  .day.inactive { opacity: 0.3; cursor: default; background: var(--bg-primary); }
+  .day.inactive:hover { outline: none; }
+  .date { position: absolute; top: 5px; right: 5px; font-size: 0.8em; color: var(--text-secondary); }
+  .pl { font-size: 1.2em; font-weight: bold; }
+  #hoverPreview { border-top: 1px solid var(--border-color); padding-top: 15px; margin-top: 20px; }
+  #previewImages { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+  #previewImages .preview-thumb-container { text-align: center; }
+  #previewImages .preview-thumb-container span { font-size: 0.8em; color: var(--text-secondary); display: block; }
+  #previewImages img {
+    max-height: 100px; max-width: 150px; cursor: zoom-in; border: 2px solid var(--border-color);
+    border-radius: 4px; background: var(--bg-primary);
+  }
+  .modal-bg, .zoom-overlay {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8);
+    display: none; justify-content: center; align-items: center; z-index: 1000;
+  }
+  .modal {
+    background: var(--bg-tertiary); padding: 25px; border-radius: 8px; width: 90%; max-width: 600px;
+    display: flex; flex-direction: column; gap: 15px;
+  }
+  .modal h2 { margin-top: 0; }
+  .modal .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .modal input, .modal textarea {
+    width: 100%; padding: 8px; box-sizing: border-box; background: var(--bg-primary);
+    border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px;
+  }
+  .actions { text-align: right; margin-top: 10px; }
+  .actions button {
+    padding: 8px 16px; margin-left: 8px; background: var(--border-color); border: none;
+    color: var(--text-primary); cursor: pointer; border-radius: 4px; transition: background 0.2s;
+  }
+  .actions #saveBtn { background: var(--win-color); color: white; }
+  #imageInputsContainer {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px; margin-top: 5px;
+  }
+  .image-dropzone {
+    border: 2px dashed var(--border-color); border-radius: 5px; padding: 5px; text-align: center;
+    cursor: pointer; position: relative; background-color: var(--bg-secondary);
+  }
+  .image-dropzone.has-image { border-style: solid; }
+  .image-dropzone.paste-target { border-color: var(--accent-color); box-shadow: 0 0 5px var(--accent-color); }
+  .image-dropzone .timeframe-label { font-weight: bold; color: var(--text-secondary); }
+  .image-dropzone .paste-hint { font-size: 0.75em; color: #888; }
+  .image-dropzone img { max-width: 100%; max-height: 60px; display: none; margin: 5px 0; border-radius: 3px; }
+  .image-dropzone.has-image img { display: block; margin: 5px auto; }
+  .delete-img-btn {
+    position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; line-height: 18px;
+    background: rgba(231, 76, 60, 0.8); color: white; border: none; border-radius: 50%;
+    cursor: pointer; font-size: 12px; font-weight: bold; display: none;
+  }
+  .image-dropzone.has-image .delete-img-btn { display: block; }
+  .zoom-overlay img { max-width: 90%; max-height: 90%; cursor: zoom-out; }
+  .chart-container {
+    width: 250px; flex-shrink: 0; padding: 20px; background: var(--bg-secondary);
+    border-radius: 8px; text-align: center;
+  }
+  #winRateChart {
+    width: 150px; height: 150px; border-radius: 50%; margin: 15px auto; background: var(--be-color);
+  }
+  #chartLegend { list-style: none; padding: 0; text-align: left; }
+  #chartLegend li { margin-bottom: 8px; display: flex; align-items: center; font-size: 0.9em; }
+  #chartLegend .legend-color { width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; display: inline-block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <button id="prevMonth"><</button>
+  <h1 id="monthLabel"></h1>
+  <button id="nextMonth">></button>
+</div>
+
+<!-- NEW: EXPORT/IMPORT BUTTONS -->
+<div class="data-actions">
+    <button id="importBtn">Import Journal from File</button>
+    <button id="exportBtn">Export Journal to File</button>
+    <input type="file" id="importFile" accept=".json, .txt" style="display: none;">
+</div>
+
+<div class="calendar-container">
+    <div class="calendar" id="calendar"></div>
+    <div class="chart-container">
+        <h3>Monthly Stats</h3>
+        <div id="winRateChart"></div>
+        <ul id="chartLegend"></ul>
+    </div>
+</div>
+
+<div id="hoverPreview">
+  <h3>Preview</h3>
+  <div id="previewDate"></div>
+  <div id="previewDetails"></div>
+  <div id="previewImages"></div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h2 id="modalDate"></h2>
+    <div class="form-group"> <label for="plInput">Total Profit/Loss:</label> <input type="number" id="plInput" step="0.01" /> </div>
+    <div class="form-group"> <label for="detailsInput">Trade Details ("NO TRADE" if none):</label> <textarea id="detailsInput" rows="3"></textarea> </div>
+    <div class="form-group"> <label>Trade Screenshots (Click a box, then Ctrl+V to paste)</label> <div id="imageInputsContainer"></div> </div>
+    <div class="actions"> <button id="cancelBtn">Cancel</button> <button id="saveBtn">Save</button> </div>
+  </div>
+</div>
+
+<div class="zoom-overlay" id="zoomOverlay"><img id="zoomImg" src="" /></div>
+
+<script>
+// --- ELEMENT SELECTORS ---
+const calendarEl = document.getElementById('calendar');
+const monthLabel = document.getElementById('monthLabel');
+const previewDate = document.getElementById('previewDate');
+const previewDetails = document.getElementById('previewDetails');
+const previewImages = document.getElementById('previewImages');
+const modalBg = document.getElementById('modalBg');
+const modalDate = document.getElementById('modalDate');
+const plInput = document.getElementById('plInput');
+const detailsInput = document.getElementById('detailsInput');
+const imageInputsContainer = document.getElementById('imageInputsContainer');
+const zoomOverlay = document.getElementById('zoomOverlay');
+const zoomImg = document.getElementById('zoomImg');
+const winRateChart = document.getElementById('winRateChart');
+const chartLegend = document.getElementById('chartLegend');
+const exportBtn = document.getElementById('exportBtn');
+const importBtn = document.getElementById('importBtn');
+const importFile = document.getElementById('importFile');
+
+// --- GLOBAL STATE ---
+let current = new Date();
+let selectedDate = null;
+let activePasteTarget = null;
+const timeframes = ['weekly', 'daily', '4h', '1h', '15m', '5m', '3m', '1m'];
+const STORAGE_KEY = 'tradeCalendarV2'; // Define a key for localStorage
+
+// --- DATA FUNCTIONS ---
+function loadData() { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+function saveData(data) { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+
+// --- RENDER FUNCTIONS (Most are unchanged) ---
+function renderCalendar() {
+  calendarEl.innerHTML = '';
+  const year = current.getFullYear();
+  const month = current.getMonth();
+  monthLabel.textContent = current.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const data = loadData();
+  const firstDay = new Date(year, month, 1);
+  const startWeekday = firstDay.getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  for (let i = 0; i < startWeekday; i++) {
+    let blank = document.createElement('div'); blank.classList.add('day', 'inactive'); calendarEl.appendChild(blank);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    let cell = document.createElement('div'); cell.classList.add('day');
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    cell.dataset.date = dateStr;
+    let label = document.createElement('div'); label.classList.add('date'); label.textContent = d; cell.appendChild(label);
+    const dayData = data[dateStr];
+    if (dayData && typeof dayData.pl !== 'undefined') {
+      let { pl } = dayData; let plEl = document.createElement('div'); plEl.classList.add('pl');
+      plEl.textContent = (pl >= 0 ? '+' : '') + pl.toFixed(2); cell.appendChild(plEl);
+      if (pl > 0) { cell.style.background = 'var(--win-bg)'; plEl.style.color = 'var(--win-color)'; }
+      else if (pl < 0) { cell.style.background = 'var(--loss-bg)'; plEl.style.color = 'var(--loss-color)'; }
+    }
+    cell.addEventListener('click', () => openModal(dateStr));
+    cell.addEventListener('mouseenter', () => showPreview(dateStr));
+    calendarEl.appendChild(cell);
+  }
+  renderWinRateChart();
+}
+function renderWinRateChart() {
+    const year = current.getFullYear(); const month = current.getMonth(); const data = loadData();
+    let wins = 0, losses = 0, breakEvens = 0;
+    for (const dateStr in data) {
+        const date = new Date(dateStr + "T00:00:00");
+        if (date.getFullYear() === year && date.getMonth() === month) {
+            const pl = data[dateStr].pl;
+            if (pl > 0) wins++;
+            else if (pl < 0) losses++;
+            else if (pl === 0 && data[dateStr].details && data[dateStr].details.toLowerCase() !== 'no trade') breakEvens++;
+        }
+    }
+    const totalTrades = wins + losses + breakEvens; chartLegend.innerHTML = '';
+    if (totalTrades === 0) { winRateChart.style.background = 'var(--be-color)'; chartLegend.innerHTML = '<li>No trade data for this month.</li>'; return; }
+    const winPercent = (wins / totalTrades) * 100; const lossPercent = (losses / totalTrades) * 100;
+    const winAngle = winPercent; const lossAngle = winPercent + lossPercent;
+    winRateChart.style.background = `conic-gradient(var(--win-color) 0% ${winAngle}%, var(--loss-color) ${winAngle}% ${lossAngle}%, var(--be-color) ${lossAngle}% 100%)`;
+    const legendItems = [
+      { label: `Wins: ${wins}`, value: winPercent, color: 'var(--win-color)' },
+      { label: `Losses: ${losses}`, value: lossPercent, color: 'var(--loss-color)' },
+      { label: `Break Even: ${breakEvens}`, value: 100 - winPercent - lossPercent, color: 'var(--be-color)' }
+    ];
+    legendItems.forEach(item => { const li = document.createElement('li'); li.innerHTML = `<span class="legend-color" style="background-color: ${item.color};"></span> ${item.label} (${item.value.toFixed(1)}%)`; chartLegend.appendChild(li); });
+}
+function showPreview(dateStr) {
+  const dayData = loadData()[dateStr]; previewDate.textContent = new Date(dateStr + 'T00:00:00').toDateString();
+  previewDetails.textContent = dayData ? dayData.details : 'No trade details for this day.'; previewImages.innerHTML = '';
+  if (dayData && dayData.images) {
+    for (const tf in dayData.images) {
+      if(dayData.images[tf]) {
+        const thumbContainer = document.createElement('div'); thumbContainer.className = 'preview-thumb-container';
+        const tfLabel = document.createElement('span'); tfLabel.textContent = tf.toUpperCase();
+        const img = document.createElement('img'); img.src = dayData.images[tf];
+        img.addEventListener('click', () => { zoomImg.src = img.src; zoomOverlay.style.display = 'flex'; });
+        thumbContainer.appendChild(img); thumbContainer.appendChild(tfLabel); previewImages.appendChild(thumbContainer);
+      }
+    }
+  }
+}
+function openModal(dateStr) {
+  selectedDate = dateStr; const dayData = loadData()[dateStr] || { pl: 0, details: '', images: {} };
+  modalDate.textContent = new Date(dateStr + 'T00:00:00').toDateString(); plInput.value = dayData.pl; detailsInput.value = dayData.details;
+  imageInputsContainer.innerHTML = '';
+  timeframes.forEach(tf => {
+    const dropzone = document.createElement('div'); dropzone.className = 'image-dropzone'; dropzone.dataset.timeframe = tf;
+    const label = document.createElement('div'); label.className = 'timeframe-label'; label.textContent = tf.toUpperCase();
+    const hint = document.createElement('div'); hint.className = 'paste-hint'; hint.textContent = 'Click & Paste';
+    const img = document.createElement('img'); const delBtn = document.createElement('button'); delBtn.className = 'delete-img-btn';
+    delBtn.innerHTML = '×'; delBtn.onclick = (e) => { e.stopPropagation(); img.src = ''; dropzone.classList.remove('has-image'); };
+    dropzone.append(label, img, hint, delBtn); imageInputsContainer.appendChild(dropzone);
+    if (dayData.images && dayData.images[tf]) { img.src = dayData.images[tf]; dropzone.classList.add('has-image'); }
+    dropzone.addEventListener('click', () => { document.querySelectorAll('.image-dropzone').forEach(dz => dz.classList.remove('paste-target')); dropzone.classList.add('paste-target'); activePasteTarget = dropzone; });
+  });
+  modalBg.style.display = 'flex'; plInput.focus();
+}
+function closeModal() { modalBg.style.display = 'none'; selectedDate = null; activePasteTarget = null; }
+
+// --- EVENT LISTENERS ---
+document.getElementById('cancelBtn').onclick = closeModal;
+document.getElementById('saveBtn').onclick = () => {
+  if (!selectedDate) return; const pl = parseFloat(plInput.value) || 0; const details = detailsInput.value.trim(); const data = loadData();
+  if (!data[selectedDate]) { data[selectedDate] = { pl: 0, details: '', images: {} }; }
+  data[selectedDate].pl = pl; data[selectedDate].details = details;
+  document.querySelectorAll('.image-dropzone').forEach(dz => {
+      const tf = dz.dataset.timeframe; const img = dz.querySelector('img');
+      if (img.src && img.src.startsWith('data:image')) { data[selectedDate].images[tf] = img.src; }
+      else if (!img.src) { delete data[selectedDate].images[tf]; }
+  });
+  saveData(data); closeModal(); renderCalendar();
+};
+document.getElementById('prevMonth').onclick = () => { current.setMonth(current.getMonth() - 1); renderCalendar(); };
+document.getElementById('nextMonth').onclick = () => { current.setMonth(current.getMonth() + 1); renderCalendar(); };
+modalBg.addEventListener('click', e => { if (e.target === modalBg) closeModal(); });
+zoomOverlay.addEventListener('click', () => zoomOverlay.style.display = 'none');
+modalBg.addEventListener('paste', e => {
+  if (!activePasteTarget) { alert("Please click on a timeframe box before pasting an image."); return; }
+  const items = e.clipboardData.items;
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith('image/')) {
+      e.preventDefault(); const file = items[i].getAsFile(); const reader = new FileReader();
+      reader.onload = e2 => { const imgEl = activePasteTarget.querySelector('img'); imgEl.src = e2.target.result; activePasteTarget.classList.add('has-image'); };
+      reader.readAsDataURL(file); break;
+    }
+  }
+});
+
+// --- NEW: EXPORT/IMPORT LOGIC ---
+exportBtn.addEventListener('click', () => {
+    const data = localStorage.getItem(STORAGE_KEY);
+    if (!data || data === '{}') {
+        alert("No journal data to export.");
+        return;
+    }
+    const blob = new Blob([data], {type: 'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `trade_journal_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+});
+
+importBtn.addEventListener('click', () => {
+    importFile.click(); // Open the file picker
+});
+
+importFile.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (confirm("Are you sure you want to import this file? This will OVERWRITE any data currently in your journal.")) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                // Basic validation to see if it looks like our data
+                if (typeof importedData === 'object' && importedData !== null) {
+                    localStorage.setItem(STORAGE_KEY, e.target.result);
+                    alert("Import successful! The page will now reload.");
+                    location.reload(); // Reload the page to apply all changes
+                } else {
+                    throw new Error("Invalid file format.");
+                }
+            } catch (err) {
+                alert("Error: Could not import file. It may be corrupted or in the wrong format.");
+                console.error(err);
+            }
+        };
+        reader.readAsText(file);
+    }
+    // Reset the file input so you can import the same file again if needed
+    event.target.value = ''; 
+});
+
+// --- INITIAL LOAD ---
+renderCalendar();
+</script>
+
+</body>
+</html>
